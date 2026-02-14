@@ -35,7 +35,7 @@ export const TestResultSchema = z.object({
       actualResult: z.string(),
       status: z.enum(["pass", "fail", "error"]),
       issue: z.string().optional(),
-    })
+    }),
   ),
 });
 
@@ -51,7 +51,7 @@ export const PolicyResultSchema = z.object({
       action: z.string(),
       reason: z.string(),
       applied: z.boolean(),
-    })
+    }),
   ),
 });
 
@@ -98,10 +98,10 @@ export const MonitorResultSchema = z.object({
         z.object({
           name: z.string(),
           calls: z.number(),
-        })
+        }),
       ),
       alerts: z.array(AlertSchema),
-    })
+    }),
   ),
 });
 

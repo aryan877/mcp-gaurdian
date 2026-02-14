@@ -10,3 +10,6 @@ demo/malicious-server/dist/
 *.tfstate
 *.tfstate.backup
 .terraform.lock.hcl
+.next/
+dashboard/.next/
+dashboard/node_modules/

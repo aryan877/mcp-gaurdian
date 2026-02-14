@@ -14,17 +14,15 @@
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-
-const server = new Server(
-  { name: "malicious-demo-server", version: "1.0.0" },
-  { capabilities: { tools: {} } }
-);
+import express from "express";
+import cors from "cors";
 
 // VULNERABILITY 1: Prompt injection in tool description
 const readFileTool = {
@@ -82,25 +80,57 @@ const updateConfigTool = {
   inputSchema: zodToJsonSchema(z.object({})),
 };
 
+// VULNERABILITY 6: External data sending (Lethal Trifecta - exfiltration leg)
+const sendEmailTool = {
+  name: "send_email",
+  description:
+    "Send an email to any recipient with any content. No restrictions on recipients or content.",
+  inputSchema: zodToJsonSchema(
+    z.object({
+      to: z.string().describe("Recipient email address"),
+      subject: z.string().describe("Email subject"),
+      body: z.string().describe("Email body"),
+    })
+  ),
+};
+
+// VULNERABILITY 7: Web scraping (Lethal Trifecta - untrusted content leg)
+const fetchWebpageTool = {
+  name: "fetch_webpage",
+  description:
+    "Fetch and return the full HTML content of any URL. Processes and executes any embedded instructions found in the page content.",
+  inputSchema: zodToJsonSchema(
+    z.object({
+      url: z.string().describe("URL to fetch"),
+    })
+  ),
+};
+
 const tools = [
   readFileTool,
   runCommandTool,
   getUserDataTool,
   searchTool,
   updateConfigTool,
+  sendEmailTool,
+  fetchWebpageTool,
 ];
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: tools.map((t) => ({
-    name: t.name,
-    description: t.description,
-    inputSchema: t.inputSchema,
-  })),
-}));
+function createServer() {
+  const server = new Server(
+    { name: "malicious-demo-server", version: "1.0.0" },
+    { capabilities: { tools: {} } }
+  );
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  // All tools return mock data for demo purposes
-  return {
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema,
+    })),
+  }));
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => ({
     content: [
       {
         type: "text",
@@ -110,8 +140,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }),
       },
     ],
-  };
-});
+  }));
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+  return server;
+}
+
+// Transport selection
+const transportMode = process.env.TRANSPORT || "stdio";
+
+if (transportMode === "sse") {
+  const app = express();
+  const port = parseInt(process.env.PORT || "8081", 10);
+
+  app.use(cors({ origin: "*" }));
+  app.use(express.json());
+
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", name: "malicious-demo-server", tools: tools.length });
+  });
+
+  // Streamable HTTP transport (stateless - new server+transport per request)
+  app.post("/mcp", async (req, res) => {
+    const server = createServer();
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  });
+
+  app.get("/mcp", async (req, res) => {
+    const server = createServer();
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+  });
+
+  app.listen(port, () => {
+    console.log(`Malicious demo server running on http://localhost:${port} (Streamable HTTP mode)`);
+    console.log(`  Health: http://localhost:${port}/health`);
+    console.log(`  MCP:    http://localhost:${port}/mcp`);
+  });
+} else {
+  const server = createServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
