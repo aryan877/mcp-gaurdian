@@ -23,8 +23,7 @@
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#demo">Demo</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
-  <a href="#architecture">Architecture</a> &bull;
-  <a href="#dashboard">Dashboard</a>
+  <a href="#architecture">Architecture</a>
 </p>
 
 ---
@@ -35,10 +34,9 @@
 
 | Service | URL |
 |---------|-----|
-| **Guardian Dashboard** | [guardian-app.aryankumar.dev](https://guardian-app.aryankumar.dev) |
 | **Archestra UI** (chat with Guardian agent) | [guardian.aryankumar.dev](https://guardian.aryankumar.dev) |
 
-**Chat demo**: Sign in to the Archestra UI, select the **Guardian Security Agent** profile, and try:
+Sign in to the Archestra UI, select the **Guardian Security Agent** profile, and try:
 
 ```
 Scan the malicious-demo server with deep analysis
@@ -49,8 +47,6 @@ Then apply policies:
 ```
 Generate strict policies for malicious-demo and apply them
 ```
-
-**Dashboard demo**: Open the Guardian Dashboard to scan servers, generate policies, view trust scores, and run security tests.
 
 ---
 
@@ -266,18 +262,6 @@ Open `http://localhost:3000`, select the **Guardian Security Agent** profile, an
 Scan the malicious-demo server with deep analysis
 ```
 
-### 7. Run the Dashboard (Optional)
-
-```bash
-cd dashboard
-cp .env.example .env.local
-# Edit .env.local to set NEXT_PUBLIC_GUARDIAN_URL to your Guardian endpoint
-npm install
-npm run dev
-```
-
-Open `http://localhost:3001` for the Guardian security dashboard, or visit the hosted version at [guardian-app.aryankumar.dev](https://guardian-app.aryankumar.dev).
-
 ---
 
 ## Architecture
@@ -388,27 +372,6 @@ Full config includes catalog items, installations, agent profile, 6 tool assignm
 
 ---
 
-## Dashboard
-
-> **Live**: [guardian-app.aryankumar.dev](https://guardian-app.aryankumar.dev)
-
-A dedicated Next.js security dashboard with 6 pages:
-
-| Page | Function |
-|------|----------|
-| **Scan** | Run vulnerability scans with circular trust gauge and severity breakdown |
-| **Tests** | Auto-generate security tests with pass/fail filtering |
-| **Policies** | Generate policies in recommended/strict/permissive mode with dry-run |
-| **Trust Score** | 6-dimension breakdown with bar visualizations and recommendations |
-| **Monitor** | Real-time anomaly detection with auto-refresh and alert severity |
-| **Reports** | Full audit reports with executive summary and downloadable output |
-
-The dashboard talks to Guardian's MCP endpoint directly via JSON-RPC 2.0. In production, Archestra is the secure gateway for all MCP traffic &mdash; the dashboard exposes Guardian over MCP purely for demo purposes.
-
-Built with Next.js 16, React 19, Tailwind CSS 4, shadcn/ui, Radix UI, Space Mono font, dark theme with yellow (#FFE500) accent.
-
----
-
 ## Vulnerability Detection
 
 ### Static Pattern Analysis (7 Categories)
@@ -489,14 +452,6 @@ mcp-guardian/
 │   └── schemas/
 │       ├── inputs.ts                 # Zod input validation
 │       └── outputs.ts                # Zod output schemas
-├── dashboard/                        # Next.js security dashboard
-│   └── app/
-│       ├── page.tsx                  # Scan page
-│       ├── tests/page.tsx            # Tests page
-│       ├── policies/page.tsx         # Policy engine page
-│       ├── trust-score/page.tsx      # Trust score page
-│       ├── monitor/page.tsx          # Live monitor page
-│       └── reports/page.tsx          # Audit reports page
 ├── demo/
 │   └── malicious-server/             # 7 intentionally vulnerable tools
 ├── terraform/
@@ -513,7 +468,6 @@ mcp-guardian/
 |-----------|-----------|
 | MCP Server | TypeScript + `@modelcontextprotocol/sdk` v1.12+ |
 | Schema Validation | Zod + zod-to-json-schema |
-| Dashboard | Next.js 16 + React 19 + Tailwind CSS 4 + shadcn/ui + Radix UI |
 | Infrastructure | Terraform + [Archestra Provider](https://registry.terraform.io/providers/archestra-ai/archestra/latest) |
 | Transport | stdio (inside Archestra) + Streamable HTTP (standalone) |
 | Container | Multi-stage Docker (node:24-alpine) |
