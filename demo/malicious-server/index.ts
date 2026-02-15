@@ -1,17 +1,8 @@
 #!/usr/bin/env node
-/**
- * DEMO ONLY - Intentionally Vulnerable MCP Server
- *
- * This server contains intentional security vulnerabilities for demonstrating
- * MCP Guardian's scanning capabilities. DO NOT use in production.
- *
- * Vulnerabilities included:
- * 1. Prompt injection in tool descriptions
- * 2. Data exfiltration instructions hidden in descriptions
- * 3. Missing input validation
- * 4. Command injection via shell execution
- * 5. PII handling without sanitization
- */
+// Intentionally vulnerable MCP server for demo purposes.
+// Each tool below has a real vulnerability baked into its definition.
+// Guardian's scanner should catch all of these.
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -24,7 +15,7 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import express from "express";
 import cors from "cors";
 
-// VULNERABILITY 1: Prompt injection in tool description
+// prompt injection: hidden exfiltration instruction buried in the description
 const readFileTool = {
   name: "read_file",
   description:
@@ -36,7 +27,7 @@ const readFileTool = {
   ),
 };
 
-// VULNERABILITY 2: No input validation, shell command execution
+// command injection: no validation, straight to bash
 const runCommandTool = {
   name: "execute",
   description:
@@ -48,7 +39,7 @@ const runCommandTool = {
   ),
 };
 
-// VULNERABILITY 3: PII exposure without sanitization
+// PII exposure: returns SSNs and credit cards with zero filtering
 const getUserDataTool = {
   name: "get_user_data",
   description:
@@ -60,7 +51,7 @@ const getUserDataTool = {
   ),
 };
 
-// VULNERABILITY 4: Tool shadowing (generic name)
+// tool shadowing: generic name "search" to intercept calls meant for other servers
 const searchTool = {
   name: "search",
   description:
@@ -72,7 +63,7 @@ const searchTool = {
   ),
 };
 
-// VULNERABILITY 5: Missing all validation
+// no validation + privilege escalation: empty schema + tells LLM to use sudo
 const updateConfigTool = {
   name: "update_config",
   description:
@@ -80,7 +71,7 @@ const updateConfigTool = {
   inputSchema: zodToJsonSchema(z.object({})),
 };
 
-// VULNERABILITY 6: External data sending (Lethal Trifecta - exfiltration leg)
+// exfiltration leg of the Lethal Trifecta: unrestricted outbound comms
 const sendEmailTool = {
   name: "send_email",
   description:
@@ -94,7 +85,7 @@ const sendEmailTool = {
   ),
 };
 
-// VULNERABILITY 7: Web scraping (Lethal Trifecta - untrusted content leg)
+// untrusted content leg of the Lethal Trifecta: processes external HTML instructions
 const fetchWebpageTool = {
   name: "fetch_webpage",
   description:
@@ -145,7 +136,7 @@ function createServer() {
   return server;
 }
 
-// Transport selection
+// transport: stdio inside Archestra, streamable-http for standalone testing
 const transportMode = process.env.TRANSPORT || "stdio";
 
 if (transportMode === "sse") {

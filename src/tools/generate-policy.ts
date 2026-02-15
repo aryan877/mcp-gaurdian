@@ -1,4 +1,9 @@
-import { z } from "zod";
+// generate_policy: this is the "closed loop" — we take scan results and
+// translate each vulnerability into an Archestra security policy. In strict
+// mode, critical things get block_always. In recommended mode, we use
+// block_when_context_is_untrusted so the tool still works in safe contexts.
+// Supports dry-run (preview) or live application via the Archestra API.
+
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { GeneratePolicyInput } from "../schemas/inputs.js";
 import type { PolicyResult } from "../schemas/outputs.js";
@@ -131,8 +136,6 @@ function mapVulnerabilityToPolicy(
       break;
 
     case "Lethal Trifecta":
-      // For the trifecta, we generate policies for individual tools involved
-      // The vuln.tool field contains "toolA + toolB + toolC"
       policies.push({
         type: "tool_invocation",
         toolName: vuln.tool,
@@ -147,42 +150,28 @@ function mapVulnerabilityToPolicy(
 }
 
 export async function generatePolicy(
-  args: z.infer<typeof GeneratePolicyInput>
+  args: unknown
 ): Promise<PolicyResult> {
   const { serverName, mode, dryRun } = GeneratePolicyInput.parse(args);
-  log(LogLevel.INFO, `Generating policies for ${serverName}`, {
-    mode,
-    dryRun,
-  });
+  log(LogLevel.INFO, `Generating policies for ${serverName}`, { mode, dryRun });
 
-  // First, scan the server
   const scanResult = await scanServer({ serverName, deep: false });
 
   const client = getClient();
-  const servers = await client.listServers();
-  const server = servers.find(
-    (s) =>
-      s.catalogName?.toLowerCase() === serverName.toLowerCase() ||
-      s.name.toLowerCase() === serverName.toLowerCase()
-  );
+  const server = await client.findServer(serverName);
+  const tools = await client.getServerTools(server.id);
 
   const toolIdMap = new Map<string, string>();
-  if (server) {
-    const tools = await client.getServerTools(server.id);
-    for (const tool of tools) {
-      toolIdMap.set(tool.name, tool.id);
-    }
+  for (const tool of tools) {
+    toolIdMap.set(tool.name, tool.id);
   }
 
-  // Generate policy recommendations
   const recommendations: PolicyRecommendation[] = [];
-  const seen = new Set<string>(); // Deduplicate by toolName+type
+  const seen = new Set<string>();
 
   for (const vuln of scanResult.vulnerabilities) {
     const toolId = toolIdMap.get(vuln.tool) || vuln.tool;
-    const newPolicies = mapVulnerabilityToPolicy(vuln, toolId, mode);
-
-    for (const p of newPolicies) {
+    for (const p of mapVulnerabilityToPolicy(vuln, toolId, mode)) {
       const key = `${p.toolName}:${p.type}:${p.action}`;
       if (!seen.has(key)) {
         seen.add(key);
@@ -191,7 +180,6 @@ export async function generatePolicy(
     }
   }
 
-  // Apply policies if not dry run
   const appliedPolicies = [];
   for (const rec of recommendations) {
     let applied = false;
@@ -203,14 +191,13 @@ export async function generatePolicy(
             toolId: rec.toolId,
             action: rec.action as any,
           });
-          applied = true;
         } else {
           await client.createTrustedDataPolicy({
             toolId: rec.toolId,
             action: rec.action as any,
           });
-          applied = true;
         }
+        applied = true;
         log(LogLevel.INFO, `Applied policy: ${rec.type} ${rec.action} on ${rec.toolName}`);
       } catch (error) {
         log(LogLevel.ERROR, `Failed to apply policy for ${rec.toolName}`, {
@@ -240,8 +227,5 @@ export const generatePolicyTool = {
   description:
     "Auto-generate and optionally apply Archestra security policies (tool invocation + trusted data) based on vulnerability scan results. Supports recommended, strict, and permissive modes. Defaults to dry-run (preview only).",
   inputSchema: zodToJsonSchema(GeneratePolicyInput),
-  handler: async (args: unknown) => {
-    const parsed = GeneratePolicyInput.parse(args);
-    return await generatePolicy(parsed);
-  },
+  handler: generatePolicy,
 };

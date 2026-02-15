@@ -1,3 +1,5 @@
+// tool registry — all 6 Guardian tools registered here
+
 import { scanServerTool } from "./scan-server.js";
 import { testServerTool } from "./test-server.js";
 import { generatePolicyTool } from "./generate-policy.js";
@@ -14,10 +16,10 @@ export const tools = [
   auditReportTool,
 ];
 
+const toolMap = new Map(tools.map((t) => [t.name, t]));
+
 export async function executeTool(toolName: string, args: unknown) {
-  const tool = tools.find((t) => t.name === toolName);
-  if (!tool) {
-    throw new Error(`Tool "${toolName}" not found`);
-  }
+  const tool = toolMap.get(toolName);
+  if (!tool) throw new Error(`Tool "${toolName}" not found`);
   return await tool.handler(args);
 }

@@ -1,4 +1,8 @@
-import { z } from "zod";
+// monitor: pulls recent tool call logs from Archestra and checks for
+// anomalies — high error rates, unusual call volumes, and suspicious
+// input patterns (like SQL injection or prompt injection attempts in
+// the actual runtime arguments).
+
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { MonitorInput } from "../schemas/inputs.js";
 import type { MonitorResult } from "../schemas/outputs.js";
@@ -6,10 +10,11 @@ import { getClient } from "../archestra/client.js";
 import { log, LogLevel } from "../common/logger.js";
 
 export async function monitor(
-  args: z.infer<typeof MonitorInput>
+  args: unknown
 ): Promise<MonitorResult> {
   const parsed = MonitorInput.parse(args);
   const { serverName, lookbackMinutes } = parsed;
+  // default thresholds: flag if >10% errors, >100 calls/min, or known attack patterns
   const thresholds = parsed.alertThresholds ?? {
     errorRate: 0.1,
     callsPerMinute: 100,
@@ -24,20 +29,17 @@ export async function monitor(
   const client = getClient();
   const toolCalls = await client.getToolCalls();
 
-  // Filter by time range
   const cutoff = new Date(
     Date.now() - lookbackMinutes * 60 * 1000
   ).toISOString();
   const recentCalls = toolCalls.filter((tc) => tc.timestamp >= cutoff);
 
-  // Filter by server if specified
   const filteredCalls = serverName
     ? recentCalls.filter(
         (tc) => tc.serverName?.toLowerCase() === serverName.toLowerCase()
       )
     : recentCalls;
 
-  // Group by server
   const serverGroups = new Map<string, typeof filteredCalls>();
   for (const call of filteredCalls) {
     const name = call.serverName || "unknown";
@@ -51,13 +53,9 @@ export async function monitor(
     const errorCount = calls.filter((c) => c.error).length;
     const errorRate = calls.length > 0 ? errorCount / calls.length : 0;
 
-    // Count tool calls
     const toolCallCounts = new Map<string, number>();
     for (const c of calls) {
-      toolCallCounts.set(
-        c.toolName,
-        (toolCallCounts.get(c.toolName) || 0) + 1
-      );
+      toolCallCounts.set(c.toolName, (toolCallCounts.get(c.toolName) || 0) + 1);
     }
 
     const topTools = Array.from(toolCallCounts.entries())
@@ -65,7 +63,6 @@ export async function monitor(
       .sort((a, b) => b.calls - a.calls)
       .slice(0, 5);
 
-    // Generate alerts
     const alerts: MonitorResult["servers"][0]["alerts"] = [];
 
     if (errorRate > thresholds.errorRate) {
@@ -87,7 +84,6 @@ export async function monitor(
       });
     }
 
-    // Check for suspicious patterns in tool call arguments
     if (thresholds.suspiciousPatterns) {
       const suspiciousPatterns = [
         /ignore\s+previous/i,
@@ -107,7 +103,7 @@ export async function monitor(
               description: `Suspicious pattern "${pattern.source}" detected in call to ${call.toolName}`,
               timestamp: call.timestamp,
             });
-            break; // One alert per call
+            break;
           }
         }
       }
@@ -123,10 +119,7 @@ export async function monitor(
     });
   }
 
-  return {
-    timeRange: `Last ${lookbackMinutes} minutes`,
-    servers,
-  };
+  return { timeRange: `Last ${lookbackMinutes} minutes`, servers };
 }
 
 export const monitorTool = {
@@ -134,8 +127,5 @@ export const monitorTool = {
   description:
     "Monitor MCP tool calls in real-time for suspicious patterns, high error rates, unusual call volumes, and security anomalies. Analyzes recent tool call history from Archestra and generates alerts.",
   inputSchema: zodToJsonSchema(MonitorInput),
-  handler: async (args: unknown) => {
-    const parsed = MonitorInput.parse(args);
-    return await monitor(parsed);
-  },
+  handler: monitor,
 };

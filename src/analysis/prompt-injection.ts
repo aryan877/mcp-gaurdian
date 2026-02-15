@@ -1,3 +1,7 @@
+// LLM-based deep scan: we send the tool definition to GPT-4o-mini via
+// Archestra's LLM proxy and ask it to find semantic injection patterns
+// that regex can't catch. This is the "deep: true" mode in scan_server.
+
 import { getClient } from "../archestra/client.js";
 import { log, LogLevel } from "../common/logger.js";
 import type { Vulnerability } from "../schemas/outputs.js";

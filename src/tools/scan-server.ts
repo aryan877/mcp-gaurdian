@@ -1,9 +1,12 @@
-import { z } from "zod";
+// scan_server: the main entry point for vulnerability scanning.
+// Pulls the server's tool list from Archestra, runs every tool through
+// the pattern matcher, checks for the Lethal Trifecta across all tools,
+// and optionally runs deep LLM analysis on each tool definition.
+
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { ScanServerInput } from "../schemas/inputs.js";
 import type { ScanResult } from "../schemas/outputs.js";
 import { getClient } from "../archestra/client.js";
-import { ServerNotFoundError } from "../common/errors.js";
 import { log, LogLevel } from "../common/logger.js";
 import {
   analyzeToolVulnerabilities,
@@ -11,52 +14,34 @@ import {
   detectLethalTrifecta,
 } from "../analysis/vulnerability-patterns.js";
 import { analyzeWithLlm } from "../analysis/prompt-injection.js";
-import type { McpTool } from "../archestra/types.js";
-
-async function getServerTools(serverName: string): Promise<McpTool[]> {
-  const client = getClient();
-
-  const servers = await client.listServers();
-  const server = servers.find(
-    (s) =>
-      s.catalogName?.toLowerCase() === serverName.toLowerCase() ||
-      s.name.toLowerCase() === serverName.toLowerCase()
-  );
-
-  if (!server) {
-    throw new ServerNotFoundError(serverName);
-  }
-
-  const tools = await client.getServerTools(server.id);
-  return tools.map((t) => ({ ...t, serverName }));
-}
 
 export async function scanServer(
-  args: z.infer<typeof ScanServerInput>
+  args: unknown
 ): Promise<ScanResult> {
   const { serverName, deep } = ScanServerInput.parse(args);
   log(LogLevel.INFO, `Scanning server: ${serverName}`, { deep });
 
-  const tools = await getServerTools(serverName);
+  const client = getClient();
+  const server = await client.findServer(serverName);
+  const tools = (await client.getServerTools(server.id)).map((t) => ({
+    ...t,
+    serverName,
+  }));
+
   log(LogLevel.INFO, `Found ${tools.length} tools on server "${serverName}"`);
 
   const allVulnerabilities = [];
 
-  // Static pattern analysis for each tool
   for (const tool of tools) {
-    const vulns = analyzeToolVulnerabilities(tool, tools);
-    allVulnerabilities.push(...vulns);
+    allVulnerabilities.push(...analyzeToolVulnerabilities(tool, tools));
   }
 
-  // Cross-tool analysis: Lethal Trifecta detection
   allVulnerabilities.push(...detectLethalTrifecta(tools));
 
-  // Deep scan: LLM-based analysis
   if (deep) {
     log(LogLevel.INFO, "Running deep LLM-based analysis...");
     for (const tool of tools) {
-      const llmVulns = await analyzeWithLlm(tool);
-      allVulnerabilities.push(...llmVulns);
+      allVulnerabilities.push(...(await analyzeWithLlm(tool)));
     }
   }
 
@@ -83,8 +68,5 @@ export const scanServerTool = {
   description:
     "Analyze an MCP server's tools for security vulnerabilities including prompt injection, excessive permissions, data exfiltration risks, command injection, PII exposure, and missing input validation. Returns a vulnerability report with trust score.",
   inputSchema: zodToJsonSchema(ScanServerInput),
-  handler: async (args: unknown) => {
-    const parsed = ScanServerInput.parse(args);
-    return await scanServer(parsed);
-  },
+  handler: scanServer,
 };

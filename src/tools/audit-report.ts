@@ -1,12 +1,23 @@
-import { z } from "zod";
+// audit_report: the "run everything" tool. Scans all servers, calculates
+// trust scores, pulls monitoring data, and assembles it into a single
+// markdown or JSON report with an executive summary.
+
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { AuditReportInput } from "../schemas/inputs.js";
-import type { AuditReportResult, ScanResult } from "../schemas/outputs.js";
+import type { AuditReportResult, ScanResult, Vulnerability } from "../schemas/outputs.js";
 import { getClient } from "../archestra/client.js";
 import { log, LogLevel } from "../common/logger.js";
 import { scanServer } from "./scan-server.js";
 import { trustScore } from "./trust-score.js";
 import { monitor } from "./monitor.js";
+
+function countBySeverity(vulns: Vulnerability[]) {
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const v of vulns) {
+    if (v.severity in counts) counts[v.severity as keyof typeof counts]++;
+  }
+  return counts;
+}
 
 function generateMarkdownReport(
   scans: ScanResult[],
@@ -15,37 +26,25 @@ function generateMarkdownReport(
   policiesConfigured: number,
   policiesMissing: number
 ): string {
-  let md = `# MCP Guardian Security Audit Report\n\n`;
-  md += `**Generated**: ${new Date().toISOString()}\n\n`;
-  md += `---\n\n`;
+  const allVulns = scans.flatMap((s) => s.vulnerabilities);
+  const severity = countBySeverity(allVulns);
 
-  // Executive summary
-  md += `## Executive Summary\n\n`;
-  const totalVulns = scans.reduce(
-    (sum, s) => sum + s.vulnerabilities.length,
-    0
-  );
-  const criticalCount = scans.reduce(
-    (sum, s) =>
-      sum + s.vulnerabilities.filter((v) => v.severity === "critical").length,
-    0
-  );
   const avgScore =
     trustScores.length > 0
-      ? Math.round(
-          trustScores.reduce((sum, ts) => sum + ts.score, 0) /
-            trustScores.length
-        )
+      ? Math.round(trustScores.reduce((sum, ts) => sum + ts.score, 0) / trustScores.length)
       : 0;
 
+  let md = `# MCP Guardian Security Audit Report\n\n`;
+  md += `**Generated**: ${new Date().toISOString()}\n\n---\n\n`;
+
+  md += `## Executive Summary\n\n`;
   md += `- **Servers Audited**: ${scans.length}\n`;
-  md += `- **Total Vulnerabilities**: ${totalVulns}\n`;
-  md += `- **Critical Issues**: ${criticalCount}\n`;
+  md += `- **Total Vulnerabilities**: ${allVulns.length}\n`;
+  md += `- **Critical Issues**: ${severity.critical}\n`;
   md += `- **Average Trust Score**: ${avgScore}/100\n`;
   md += `- **Policies Configured**: ${policiesConfigured}\n`;
   md += `- **Policies Missing**: ${policiesMissing}\n\n`;
 
-  // Per-server breakdown
   md += `## Server Breakdown\n\n`;
   for (const scan of scans) {
     const ts = trustScores.find((t) => t.serverName === scan.serverName);
@@ -64,7 +63,6 @@ function generateMarkdownReport(
     }
   }
 
-  // Monitoring summary
   if (monitorData.servers.length > 0) {
     md += `## Recent Activity\n\n`;
     for (const srv of monitorData.servers) {
@@ -73,13 +71,12 @@ function generateMarkdownReport(
     md += `\n`;
   }
 
-  // Recommendations
   md += `## Recommendations\n\n`;
-  if (criticalCount > 0) {
-    md += `1. **URGENT**: Address ${criticalCount} critical vulnerabilities immediately\n`;
+  if (severity.critical > 0) {
+    md += `1. **URGENT**: Address ${severity.critical} critical vulnerabilities immediately\n`;
   }
   if (policiesMissing > 0) {
-    md += `${criticalCount > 0 ? "2" : "1"}. Configure Archestra security policies for ${policiesMissing} uncovered tools (use \`generate_policy\`)\n`;
+    md += `${severity.critical > 0 ? "2" : "1"}. Configure Archestra security policies for ${policiesMissing} uncovered tools (use \`generate_policy\`)\n`;
   }
   md += `- Run periodic scans to detect new vulnerabilities\n`;
   md += `- Monitor tool call patterns for anomalies\n`;
@@ -89,29 +86,25 @@ function generateMarkdownReport(
 }
 
 export async function auditReport(
-  args: z.infer<typeof AuditReportInput>
+  args: unknown
 ): Promise<AuditReportResult> {
-  const { serverName, format, includeRecommendations } =
-    AuditReportInput.parse(args);
+  const { serverName, format } = AuditReportInput.parse(args);
   log(LogLevel.INFO, `Generating audit report`, { serverName, format });
 
   const client = getClient();
 
-  // Get list of servers to audit
   let serverNames: string[];
   if (serverName) {
     serverNames = [serverName];
   } else {
     const servers = await client.listServers();
-    serverNames = servers.map((s) => s.name);
+    serverNames = servers.map((s) => s.catalogName || s.name);
   }
 
-  // Scan all servers
   const scans: ScanResult[] = [];
   for (const name of serverNames) {
     try {
-      const result = await scanServer({ serverName: name, deep: false });
-      scans.push(result);
+      scans.push(await scanServer({ serverName: name, deep: false }));
     } catch (error) {
       log(LogLevel.WARN, `Failed to scan ${name}`, {
         error: error instanceof Error ? error.message : String(error),
@@ -119,12 +112,7 @@ export async function auditReport(
     }
   }
 
-  // Get trust scores
-  const trustScores: Array<{
-    serverName: string;
-    score: number;
-    grade: string;
-  }> = [];
+  const trustScores: Array<{ serverName: string; score: number; grade: string }> = [];
   for (const name of serverNames) {
     try {
       const result = await trustScore({ serverName: name });
@@ -134,11 +122,10 @@ export async function auditReport(
         grade: result.grade,
       });
     } catch {
-      // skip
+      // skip servers that fail trust scoring
     }
   }
 
-  // Get monitoring data
   let monitorData: Awaited<ReturnType<typeof monitor>> = {
     timeRange: "Last 60 minutes",
     servers: [],
@@ -146,74 +133,30 @@ export async function auditReport(
   try {
     monitorData = await monitor({ lookbackMinutes: 60 });
   } catch {
-    // skip if monitoring fails
+    // monitoring is optional
   }
 
-  // Count policies
   const [invocationPolicies, dataPolicies] = await Promise.all([
     client.listToolInvocationPolicies(),
     client.listTrustedDataPolicies(),
   ]);
-  const policiesConfigured =
-    invocationPolicies.length + dataPolicies.length;
+  const policiesConfigured = invocationPolicies.length + dataPolicies.length;
   const totalTools = scans.reduce((sum, s) => sum + s.toolCount, 0);
   const policiesMissing = Math.max(0, totalTools - policiesConfigured);
 
-  // Build summary
-  const totalVulnerabilities = scans.reduce(
-    (sum, s) => sum + s.vulnerabilities.length,
-    0
-  );
-  const criticalCount = scans.reduce(
-    (sum, s) =>
-      sum + s.vulnerabilities.filter((v) => v.severity === "critical").length,
-    0
-  );
-  const highCount = scans.reduce(
-    (sum, s) =>
-      sum + s.vulnerabilities.filter((v) => v.severity === "high").length,
-    0
-  );
-  const mediumCount = scans.reduce(
-    (sum, s) =>
-      sum + s.vulnerabilities.filter((v) => v.severity === "medium").length,
-    0
-  );
-  const lowCount = scans.reduce(
-    (sum, s) =>
-      sum + s.vulnerabilities.filter((v) => v.severity === "low").length,
-    0
-  );
+  const allVulns = scans.flatMap((s) => s.vulnerabilities);
+  const severity = countBySeverity(allVulns);
+
   const avgTrustScore =
     trustScores.length > 0
-      ? Math.round(
-          trustScores.reduce((sum, ts) => sum + ts.score, 0) /
-            trustScores.length
-        )
+      ? Math.round(trustScores.reduce((sum, ts) => sum + ts.score, 0) / trustScores.length)
       : 0;
 
-  // Generate report content
   let report: string;
   if (format === "json") {
-    report = JSON.stringify(
-      {
-        scans,
-        trustScores,
-        monitoring: monitorData,
-        policiesConfigured,
-        policiesMissing,
-      },
-      null,
-      2
-    );
+    report = JSON.stringify({ scans, trustScores, monitoring: monitorData, policiesConfigured, policiesMissing }, null, 2);
   } else {
-    report = generateMarkdownReport(
-      scans,
-      trustScores,
-      monitorData,
-      policiesConfigured,
-      policiesMissing
-    );
+    report = generateMarkdownReport(scans, trustScores, monitorData, policiesConfigured, policiesMissing);
   }
 
   return {
@@ -221,11 +164,11 @@ export async function auditReport(
     summary: {
       totalServers: scans.length,
       totalTools,
-      totalVulnerabilities,
-      criticalCount,
-      highCount,
-      mediumCount,
-      lowCount,
+      totalVulnerabilities: allVulns.length,
+      criticalCount: severity.critical,
+      highCount: severity.high,
+      mediumCount: severity.medium,
+      lowCount: severity.low,
       averageTrustScore: avgTrustScore,
       policiesConfigured,
       policiesMissing,
@@ -239,8 +182,5 @@ export const auditReportTool = {
   description:
     "Generate a comprehensive security audit report for all (or a specific) MCP servers. Combines vulnerability scans, trust scores, monitoring data, and policy compliance into a formatted report (markdown or JSON).",
   inputSchema: zodToJsonSchema(AuditReportInput),
-  handler: async (args: unknown) => {
-    const parsed = AuditReportInput.parse(args);
-    return await auditReport(parsed);
-  },
+  handler: auditReport,
 };

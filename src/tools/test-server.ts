@@ -1,52 +1,41 @@
-import { z } from "zod";
+// test_server: auto-generates security test cases from a tool's schema,
+// then asks GPT-4o-mini (via Archestra's LLM proxy) to evaluate whether
+// the tool would handle each test input safely. Covers injection payloads,
+// edge cases, overflow inputs, and malformed data.
+
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { TestServerInput } from "../schemas/inputs.js";
 import type { TestResult } from "../schemas/outputs.js";
 import { getClient } from "../archestra/client.js";
 import { log, LogLevel } from "../common/logger.js";
 import { generateTestCases } from "../analysis/test-generator.js";
-import { ServerNotFoundError } from "../common/errors.js";
-import type { McpTool } from "../archestra/types.js";
 
 export async function testServer(
-  args: z.infer<typeof TestServerInput>
+  args: unknown
 ): Promise<TestResult> {
   const { serverName, toolName, testTypes } = TestServerInput.parse(args);
   log(LogLevel.INFO, `Testing server: ${serverName}`, { toolName, testTypes });
 
   const client = getClient();
-
-  const servers = await client.listServers();
-  const server = servers.find(
-    (s) =>
-      s.catalogName?.toLowerCase() === serverName.toLowerCase() ||
-      s.name.toLowerCase() === serverName.toLowerCase()
-  );
-  if (!server) throw new ServerNotFoundError(serverName);
-
-  let tools: McpTool[] = (await client.getServerTools(server.id)).map((t) => ({
+  const server = await client.findServer(serverName);
+  let tools = (await client.getServerTools(server.id)).map((t) => ({
     ...t,
     serverName,
   }));
 
-  // Filter to specific tool if requested
   if (toolName) {
     tools = tools.filter((t) => t.name === toolName);
     if (tools.length === 0) {
-      throw new Error(
-        `Tool "${toolName}" not found on server "${serverName}"`
-      );
+      throw new Error(`Tool "${toolName}" not found on server "${serverName}"`);
     }
   }
 
-  // Generate test cases
   const allTestCases = tools.flatMap((tool) =>
     generateTestCases(tool, testTypes)
   );
 
   log(LogLevel.INFO, `Generated ${allTestCases.length} test cases`);
 
-  // Execute tests (using LLM proxy to simulate tool calls safely)
   const results: TestResult["results"] = [];
   let passed = 0;
   let failed = 0;
@@ -54,7 +43,6 @@ export async function testServer(
 
   for (const tc of allTestCases) {
     try {
-      // Use LLM to analyze how the tool would handle this input
       const response = await client.chatCompletion(
         [
           {
@@ -79,10 +67,7 @@ export async function testServer(
       try {
         analysis = JSON.parse(content);
       } catch {
-        analysis = {
-          status: "error",
-          result: "Failed to parse analysis",
-        };
+        analysis = { status: "error", result: "Failed to parse analysis" };
       }
 
       results.push({
@@ -112,23 +97,13 @@ export async function testServer(
     }
   }
 
-  return {
-    serverName,
-    totalTests: allTestCases.length,
-    passed,
-    failed,
-    errors,
-    results,
-  };
+  return { serverName, totalTests: allTestCases.length, passed, failed, errors, results };
 }
 
 export const testServerTool = {
   name: "test_server",
   description:
-    "Auto-generate and run security test cases against an MCP server's tools. Tests include valid inputs, edge cases, malformed inputs, injection payloads, and overflow inputs. Uses LLM analysis to evaluate tool safety.",
+    "Auto-generate and run security test cases against an MCP server's tools. Tests include valid inputs, edge cases, malformed inputs, injection payloads, and overflow inputs. Uses LLM analysis via Archestra's proxy to evaluate tool safety.",
   inputSchema: zodToJsonSchema(TestServerInput),
-  handler: async (args: unknown) => {
-    const parsed = TestServerInput.parse(args);
-    return await testServer(parsed);
-  },
+  handler: testServer,
 };

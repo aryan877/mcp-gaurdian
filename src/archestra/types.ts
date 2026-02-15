@@ -1,3 +1,6 @@
+// Types for the Archestra platform API responses.
+// These map directly to what the API returns.
+
 export interface McpServer {
   id: string;
   name: string;
@@ -46,14 +49,6 @@ export interface McpToolCall {
   timestamp: string;
 }
 
-export interface Agent {
-  id: string;
-  name: string;
-  description?: string;
-  model?: string;
-  tools?: McpTool[];
-}
-
 export interface LlmChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -66,13 +61,4 @@ export interface LlmChatResponse {
       content: string;
     };
   }>;
-}
-
-export interface Limit {
-  id?: string;
-  entityId: string;
-  entityType: string;
-  limitType: string;
-  limitValue: number;
-  model?: string[];
 }

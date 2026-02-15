@@ -83,7 +83,7 @@ export function Sidebar() {
           <span className="tracking-wide">Open Archestra</span>
         </a>
         <p className="mt-2 text-[10px] text-muted-foreground/50 tracking-wider">
-          v1.0.0 // HACKATHON BUILD
+          v1.0.0
         </p>
       </div>
     </aside>

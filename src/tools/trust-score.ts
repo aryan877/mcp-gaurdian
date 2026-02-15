@@ -1,4 +1,7 @@
-import { z } from "zod";
+// trust_score: runs a scan, then feeds the vulnerabilities + existing policies
+// into the 6-dimension scoring engine. Returns A+ through F with a full
+// breakdown of what's strong and what's weak.
+
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { TrustScoreInput } from "../schemas/inputs.js";
 import type { TrustScoreResult } from "../schemas/outputs.js";
@@ -6,33 +9,22 @@ import { getClient } from "../archestra/client.js";
 import { log, LogLevel } from "../common/logger.js";
 import { scanServer } from "./scan-server.js";
 import { calculateTrustScore } from "../analysis/scoring.js";
-import type { McpTool } from "../archestra/types.js";
-import { ServerNotFoundError } from "../common/errors.js";
 
 export async function trustScore(
-  args: z.infer<typeof TrustScoreInput>
+  args: unknown
 ): Promise<TrustScoreResult> {
   const { serverName } = TrustScoreInput.parse(args);
   log(LogLevel.INFO, `Calculating trust score for ${serverName}`);
 
   const client = getClient();
-
-  // Get scan results
   const scanResult = await scanServer({ serverName, deep: false });
 
-  const servers = await client.listServers();
-  const server = servers.find(
-    (s) =>
-      s.catalogName?.toLowerCase() === serverName.toLowerCase() ||
-      s.name.toLowerCase() === serverName.toLowerCase()
-  );
-  if (!server) throw new ServerNotFoundError(serverName);
+  const server = await client.findServer(serverName);
+  const tools = (await client.getServerTools(server.id)).map((t) => ({
+    ...t,
+    serverName,
+  }));
 
-  const tools: McpTool[] = (await client.getServerTools(server.id)).map(
-    (t) => ({ ...t, serverName })
-  );
-
-  // Get existing policies
   const [toolInvocationPolicies, trustedDataPolicies] = await Promise.all([
     client.listToolInvocationPolicies(),
     client.listTrustedDataPolicies(),
@@ -55,8 +47,5 @@ export const trustScoreTool = {
   description:
     "Calculate a comprehensive trust score (0-100) for an MCP server with detailed breakdown across 6 dimensions: tool description safety, input validation, permission scope, data handling, error handling, and policy compliance. Returns a letter grade (A+ to F) with recommendations.",
   inputSchema: zodToJsonSchema(TrustScoreInput),
-  handler: async (args: unknown) => {
-    const parsed = TrustScoreInput.parse(args);
-    return await trustScore(parsed);
-  },
+  handler: trustScore,
 };

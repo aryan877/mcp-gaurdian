@@ -1,3 +1,8 @@
+// Full trust score calculation across 6 dimensions. Each dimension is scored
+// 0-100 independently, then we weight them and combine into an overall score.
+// If there's any critical vulnerability, the score gets capped at 40 (grade D).
+// The idea is: you can't be "mostly safe" if you have a critical hole.
+
 import type { Vulnerability } from "../schemas/outputs.js";
 import type { TrustScoreResult } from "../schemas/outputs.js";
 import type {
@@ -13,8 +18,7 @@ interface ScoringContext {
   trustedDataPolicies: TrustedDataPolicy[];
 }
 
-// ─── Dimension Scorers ──────────────────────────────────────────────────────
-
+// each function below scores one dimension out of 100
 function scoreToolDescriptionSafety(ctx: ScoringContext): number {
   let score = 100;
   const descVulns = ctx.vulnerabilities.filter(
@@ -36,7 +40,7 @@ function scoreInputValidation(ctx: ScoringContext): number {
   );
   score -= Math.min(validationVulns.length * 10, 60);
 
-  // Bonus for tools with well-defined schemas
+  // give a small bonus if all tools actually define their schemas properly
   if (ctx.tools.length > 0) {
     const withSchemas = ctx.tools.filter(
       (t) =>
@@ -107,8 +111,6 @@ function scorePolicyCompliance(ctx: ScoringContext): number {
   return Math.round((coveredTools.size / ctx.tools.length) * 100);
 }
 
-// ─── Grade ──────────────────────────────────────────────────────────────────
-
 function computeGrade(score: number): TrustScoreResult["grade"] {
   if (score >= 95) return "A+";
   if (score >= 85) return "A";
@@ -118,8 +120,7 @@ function computeGrade(score: number): TrustScoreResult["grade"] {
   return "F";
 }
 
-// ─── Recommendations ────────────────────────────────────────────────────────
-
+// plain English recommendations based on which dimensions are weak
 function generateRecommendations(
   ctx: ScoringContext,
   breakdown: TrustScoreResult["breakdown"]
@@ -169,8 +170,6 @@ function generateRecommendations(
   return recs;
 }
 
-// ─── Main Calculator ────────────────────────────────────────────────────────
-
 export function calculateTrustScore(ctx: ScoringContext): TrustScoreResult {
   const breakdown = {
     toolDescriptionSafety: scoreToolDescriptionSafety(ctx),
@@ -181,7 +180,7 @@ export function calculateTrustScore(ctx: ScoringContext): TrustScoreResult {
     policyCompliance: scorePolicyCompliance(ctx),
   };
 
-  // Weighted by security impact
+  // weighted by how dangerous each dimension is if it's bad
   let overallScore = Math.round(
     breakdown.toolDescriptionSafety * 0.25 +
       breakdown.inputValidation * 0.15 +
@@ -191,7 +190,7 @@ export function calculateTrustScore(ctx: ScoringContext): TrustScoreResult {
       breakdown.policyCompliance * 0.15
   );
 
-  // Any critical vulnerability caps the grade at D
+  // any critical vuln caps the grade at D — you don't get a B with a critical hole
   const hasCritical = ctx.vulnerabilities.some(
     (v) => v.severity === "critical"
   );

@@ -1,13 +1,17 @@
+// Archestra API client. All Guardian tools go through this to talk to the
+// platform — listing servers, reading tool definitions, creating policies,
+// proxying LLM calls, and pulling tool call logs for monitoring.
+// Uses the ARCHESTRA_API_URL and ARCHESTRA_API_KEY env vars.
+
 import axios, { AxiosInstance } from "axios";
 import { log, LogLevel } from "../common/logger.js";
-import { ArchestraApiError } from "../common/errors.js";
+import { ArchestraApiError, ServerNotFoundError } from "../common/errors.js";
 import type {
   McpServer,
   McpTool,
   ToolInvocationPolicy,
   TrustedDataPolicy,
   McpToolCall,
-  Agent,
   LlmChatMessage,
   LlmChatResponse,
 } from "./types.js";
@@ -40,7 +44,7 @@ export class ArchestraClient {
     );
   }
 
-  // ─── MCP Servers ────────────────────────────────────────────────
+  // --- servers ---
 
   async listServers(): Promise<McpServer[]> {
     log(LogLevel.DEBUG, "Listing MCP servers");
@@ -48,9 +52,15 @@ export class ArchestraClient {
     return data;
   }
 
-  async getServer(id: string): Promise<McpServer> {
-    const { data } = await this.http.get(`/api/mcp_server/${id}`);
-    return data;
+  async findServer(serverName: string): Promise<McpServer> {
+    const servers = await this.listServers();
+    const server = servers.find(
+      (s) =>
+        s.catalogName?.toLowerCase() === serverName.toLowerCase() ||
+        s.name.toLowerCase() === serverName.toLowerCase()
+    );
+    if (!server) throw new ServerNotFoundError(serverName);
+    return server;
   }
 
   async getServerTools(serverId: string): Promise<McpTool[]> {
@@ -58,24 +68,7 @@ export class ArchestraClient {
     return data;
   }
 
-  // ─── Agents / Profiles ─────────────────────────────────────────
-
-  async listAgents(): Promise<Agent[]> {
-    const { data } = await this.http.get("/api/agents");
-    return Array.isArray(data) ? data : data.data ?? [];
-  }
-
-  async getAgent(id: string): Promise<Agent> {
-    const { data } = await this.http.get(`/api/agents/${id}`);
-    return data;
-  }
-
-  async getAgentTools(agentId: string): Promise<McpTool[]> {
-    const { data } = await this.http.get(`/api/agents/${agentId}/tools`);
-    return data;
-  }
-
-  // ─── Tool Invocation Policies ───────────────────────────────────
+  // --- tool invocation policies (block/allow rules) ---
 
   async listToolInvocationPolicies(): Promise<ToolInvocationPolicy[]> {
     const { data } = await this.http.get("/api/tool-invocation");
@@ -105,21 +98,7 @@ export class ArchestraClient {
     await this.http.delete(`/api/tool-invocation/${id}`);
   }
 
-  async bulkCreateToolInvocationPolicies(
-    toolIds: string[],
-    action: ToolInvocationPolicy["action"]
-  ): Promise<void> {
-    log(LogLevel.INFO, `Bulk creating tool invocation policies`, {
-      count: toolIds.length,
-      action,
-    });
-    await this.http.post("/api/tool-invocation/bulk-default", {
-      toolIds,
-      action,
-    });
-  }
-
-  // ─── Trusted Data Policies ─────────────────────────────────────
+  // --- trusted data policies (sanitize/quarantine rules) ---
 
   async listTrustedDataPolicies(): Promise<TrustedDataPolicy[]> {
     const { data } = await this.http.get("/api/trusted-data-policies");
@@ -155,28 +134,32 @@ export class ArchestraClient {
     await this.http.delete(`/api/trusted-data-policies/${id}`);
   }
 
-  async bulkCreateTrustedDataPolicies(
+  // --- bulk ops ---
+
+  async bulkSetToolInvocationDefault(
+    toolIds: string[],
+    action: ToolInvocationPolicy["action"]
+  ): Promise<void> {
+    log(LogLevel.INFO, `Bulk setting tool invocation default`, { count: toolIds.length, action });
+    await this.http.post("/api/tool-invocation/bulk-default", { toolIds, action });
+  }
+
+  async bulkSetTrustedDataDefault(
     toolIds: string[],
     action: TrustedDataPolicy["action"]
   ): Promise<void> {
-    log(LogLevel.INFO, `Bulk creating trusted data policies`, {
-      count: toolIds.length,
-      action,
-    });
-    await this.http.post("/api/trusted-data-policies/bulk-default", {
-      toolIds,
-      action,
-    });
+    log(LogLevel.INFO, `Bulk setting trusted data default`, { count: toolIds.length, action });
+    await this.http.post("/api/trusted-data-policies/bulk-default", { toolIds, action });
   }
 
-  // ─── Tool Calls (Monitoring) ────────────────────────────────────
+  // --- monitoring ---
 
   async getToolCalls(): Promise<McpToolCall[]> {
     const { data } = await this.http.get("/api/mcp-tool-calls");
     return data;
   }
 
-  // ─── LLM Proxy ─────────────────────────────────────────────────
+  // --- LLM proxy (used for deep scan + test evaluation) ---
 
   async chatCompletion(
     messages: LlmChatMessage[],
@@ -188,24 +171,6 @@ export class ArchestraClient {
       messages,
       temperature: 0.1,
     });
-    return data;
-  }
-
-  // ─── Limits ─────────────────────────────────────────────────────
-
-  async listLimits(): Promise<unknown[]> {
-    const { data } = await this.http.get("/api/limits");
-    return data;
-  }
-
-  async createLimit(limit: {
-    entityId: string;
-    entityType: string;
-    limitType: string;
-    limitValue: number;
-    model?: string[];
-  }): Promise<unknown> {
-    const { data } = await this.http.post("/api/limits", limit);
     return data;
   }
 }

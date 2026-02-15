@@ -1,3 +1,6 @@
+// Zod schemas for everything Guardian returns. Each tool has a matching
+// output type here. These also double as runtime validation.
+
 import { z } from "zod";
 
 export const VulnerabilitySchema = z.object({

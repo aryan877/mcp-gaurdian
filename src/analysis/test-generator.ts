@@ -1,3 +1,9 @@
+// Generates test cases from a tool's JSON schema. We look at each parameter's
+// type and produce inputs designed to break things: empty strings, huge arrays,
+// SQL injection payloads, path traversal attempts, prompt injections, etc.
+// The tests are then sent to GPT-4o-mini (via test-server.ts) to evaluate
+// whether the tool would handle them safely.
+
 import type { McpTool } from "../archestra/types.js";
 
 export interface TestCase {

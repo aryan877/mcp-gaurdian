@@ -75,7 +75,7 @@ export const AuditReportInput = z.object({
     .optional()
     .describe("Specific server (all servers if omitted)"),
   format: z
-    .enum(["markdown", "json", "html"])
+    .enum(["markdown", "json"])
     .optional()
     .default("markdown"),
   includeRecommendations: z.boolean().optional().default(true),
