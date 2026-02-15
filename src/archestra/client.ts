@@ -97,7 +97,12 @@ export class ArchestraClient {
       toolId: policy.toolId,
       action: policy.action,
     });
-    const { data } = await this.http.post("/api/autonomy-policies/tool-invocation", policy);
+    const { data } = await this.http.post("/api/autonomy-policies/tool-invocation", {
+      toolId: policy.toolId,
+      action: policy.action,
+      conditions: [],
+      reason: policy.toolName ? `Guardian policy for ${policy.toolName}` : undefined,
+    });
     return data;
   }
 
@@ -127,10 +132,11 @@ export class ArchestraClient {
       toolId: policy.toolId,
       action: policy.action,
     });
-    const { data } = await this.http.post(
-      "/api/trusted-data-policies",
-      policy
-    );
+    const { data } = await this.http.post("/api/trusted-data-policies", {
+      toolId: policy.toolId,
+      action: policy.action,
+      conditions: [],
+    });
     return data;
   }
 
