@@ -1,0 +1,126 @@
+================================================================================
+  2 FAST 2 MCP — HACKATHON SUBMISSION
+================================================================================
+
+Team name:              Aryan Kumar
+Name:                   Aryan Kumar
+GitHub link:            https://github.com/aryan877/mcp-guardian
+Deployed link:          https://guardian.aryankumar.dev
+YouTube video:          <paste after recording>
+
+
+--- Project description ---
+
+I built an MCP server that scans other MCP servers for security problems and
+fixes them. It reads tool definitions from Archestra, checks them against 50+
+attack patterns (prompt injection, data exfiltration, command injection, etc),
+then writes blocking policies back to Archestra so no agent can use the
+dangerous tools. Scan to fix in one chat command. Comes with a demo server
+I built with 7 intentionally broken tools to show it working end to end.
+
+
+--- Describe how you have used Archestra in your project ---
+
+Guardian runs as a pod in Archestra's embedded K8s, deployed through Terraform
+with the Archestra provider. It uses the LLM proxy for deep scans, reads
+server metadata through the API, and writes tool invocation + trusted data
+policies back through the same API. You interact with it entirely through
+Archestra's chat. The security engine enforces every policy Guardian creates,
+so no agent can bypass the blocks regardless of how clever the prompt is.
+
+
+================================================================================
+  VIDEO SCRIPT (~2:30)
+================================================================================
+
+--- INTRO (0:00 - 0:20) ---
+
+"Hey, I'm Aryan. I built MCP Guardian for the 2 Fast 2 MCP hackathon.
+
+So here's the thing — MCP servers let agents do real stuff. Read files, call
+APIs, send emails. But nobody checks if those tools are safe to use together.
+I kept finding the same pattern: one tool reads private data, another touches
+untrusted content, a third can send emails. Put them together and you've got
+an exfiltration chain. I call it the Lethal Trifecta.
+
+Guardian catches it and shuts it down."
+
+
+--- ARCHITECTURE (0:20 - 0:45) ---
+
+[Show the README or architecture diagram on screen]
+
+"Guardian is itself an MCP server on Archestra. Six tools: scan, test, generate
+policies, trust score, monitor, audit report.
+
+It never runs the dangerous tools. It reads their definitions through
+Archestra's API — the names, descriptions, input schemas — and checks them
+against 50+ known attack patterns. Turn on deep mode and it also runs them
+through an LLM via Archestra's proxy for the stuff regex can't catch.
+
+The part I'm most proud of: it doesn't just tell you what's wrong. It writes
+real blocking policies back to Archestra. Found a vulnerability? It's now
+blocked for every agent. One step.
+
+Everything deploys with a single terraform apply."
+
+
+--- LIVE DEMO (0:45 - 2:10) ---
+
+[guardian.aryankumar.dev open, Guardian Security Agent profile selected]
+
+"Let me show you. I've got a malicious server deployed with 7 bad tools.
+Prompt injection hidden in read_file, shell execution in execute, SSNs
+leaking from get_user_data."
+
+[Type: Scan the malicious-demo server with deep analysis]
+
+"Running a full scan with deep analysis."
+
+[Wait for results]
+
+"19 vulnerabilities. Trust score zero, grade F. It found the Lethal Trifecta —
+read_file for private data, fetch_webpage for untrusted content, send_email
+for getting data out. That's the full chain."
+
+[Type: Generate strict policies for malicious-demo and apply them]
+
+"Now generating and applying policies."
+
+[Wait for results]
+
+"Done. read_file and execute are completely blocked. get_user_data goes through
+dual LLM sanitization so injection gets stripped from the output. send_email
+is blocked when the context is untrusted."
+
+[Go to Archestra > Tool Policies page]
+
+"And here's the proof. These policies are live right now. No agent on this
+platform can call read_file anymore. That's platform-level enforcement, not
+something a prompt can talk its way around."
+
+
+--- WRAP UP (2:10 - 2:30) ---
+
+"What I took away from this: the Lethal Trifecta is in basically every MCP
+setup, and most people miss it because the tools look fine individually. You
+need to check them as a system. And blocking at the platform level is the
+right answer because no prompt injection gets past a policy engine.
+
+Built solo. TypeScript, Archestra, Terraform. Links in the description.
+Thanks for watching."
+
+
+================================================================================
+  RECORDING NOTES
+================================================================================
+
+- Everything should already be deployed. No setup on camera.
+- Be logged in, Guardian profile selected before you hit record.
+- Zoom the browser so scan results are readable on video.
+- Pause briefly when results stream in. Don't talk over them.
+- Show the Tool Policies page in settings. That's the proof.
+- Speed up any waiting in post if needed.
+- Talk like you're showing a friend, not reading a script.
+
+================================================================================

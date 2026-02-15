@@ -5,7 +5,7 @@
 <h1 align="center">MCP Guardian</h1>
 
 <p align="center">
-  <b>Autonomous security auditor that scans, tests, and locks down MCP servers on Archestra</b>
+  <b>An MCP server that scans, tests, and locks down other MCP servers</b>
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <a href="#live-demo">Live Demo</a> &bull;
+  <a href="#try-it">Try It</a> &bull;
   <a href="#the-problem">Problem</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#demo">Demo</a> &bull;
@@ -28,21 +28,21 @@
 
 ---
 
-## Live Demo
+## Try It
 
-> **Try it now** &mdash; no setup required.
+> No setup needed. Open, sign in, chat.
 
-| Service | URL |
-|---------|-----|
-| **Archestra UI** (chat with Guardian agent) | [guardian.aryankumar.dev](https://guardian.aryankumar.dev) |
+| | |
+|---|---|
+| **Archestra UI** | [guardian.aryankumar.dev](https://guardian.aryankumar.dev) |
 
-Sign in to the Archestra UI, select the **Guardian Security Agent** profile, and try:
+Select the **Guardian Security Agent** profile and type:
 
 ```
 Scan the malicious-demo server with deep analysis
 ```
 
-Then apply policies:
+Then lock it down:
 
 ```
 Generate strict policies for malicious-demo and apply them
@@ -52,141 +52,128 @@ Generate strict policies for malicious-demo and apply them
 
 ## The Problem
 
-MCP servers give AI agents superpowers &mdash; file access, API calls, database queries, email. But **who audits the agents?**
+MCP servers give AI agents real power: file access, API calls, database queries, email. But nobody's checking whether those tools are safe to use together.
 
-A single misconfigured server creates the **Lethal Trifecta**:
+We kept running into the same pattern across every non-trivial MCP server we tested:
 
-```
-  read_file()          fetch_webpage()         send_email()
-  ─────────────        ─────────────────       ────────────────
-  Private Data    +    Untrusted Content   +   External Comms
-       │                      │                       │
-       └──────────── DATA EXFILTRATION ──────────────┘
-```
+<p align="center">
+  <img src="docs/lethal-trifecta.jpg" width="700" alt="The Lethal Trifecta">
+</p>
 
-We found this pattern in **every non-trivial MCP server** we tested. Most developers don't realize their combination of tools creates an attack surface.
+One tool reads private data. Another processes content from the internet. A third sends emails. Each one looks harmless alone. Together, they're a complete data exfiltration chain.
 
-**MCP Guardian fixes this automatically.** It scans servers, finds vulnerabilities, and creates Archestra security policies that block attacks &mdash; without human intervention.
+We call it the **Lethal Trifecta**. Most developers never see it because they're looking at tools individually, not as a system.
+
+Guardian finds this pattern and shuts it down.
 
 ---
 
 ## How It Works
 
-Guardian is itself an MCP server running on Archestra. It provides **6 security tools** that any AI agent can invoke:
+Guardian is itself an MCP server running on Archestra. It exposes 6 tools that any AI agent can call:
 
-| Tool | What It Does |
+| Tool | What it does |
 |------|-------------|
-| **`scan_server`** | Static pattern analysis + LLM deep scan across 7 vulnerability categories |
-| **`test_server`** | Auto-generates injection, overflow, and edge-case tests against tools |
-| **`generate_policy`** | Creates and **applies** Archestra security policies from scan results |
-| **`trust_score`** | 6-dimension weighted score (0-100) with letter grades A+ through F |
-| **`monitor`** | Real-time anomaly detection: error spikes, volume anomalies, suspicious inputs |
-| **`audit_report`** | Full multi-server security report combining all analyses |
+| `scan_server` | Runs 50+ vulnerability patterns + LLM deep scan across 7 categories |
+| `test_server` | Generates injection, overflow, and edge-case tests against tools |
+| `generate_policy` | Creates Archestra security policies and applies them |
+| `trust_score` | Calculates a weighted score (0-100) across 6 dimensions |
+| `monitor` | Watches for error spikes, volume anomalies, suspicious inputs |
+| `audit_report` | Produces a full multi-server security report |
 
-### The Killer Feature: Closed-Loop Security
+### What makes it different
 
-Most security tools stop at reporting. Guardian **closes the loop**:
+Most security tools stop at reporting. Guardian closes the loop.
 
-```
-  Scan           Analyze          Generate         Enforce
-  ─────────  →  ─────────────  →  ──────────  →  ──────────────
-  read_file      CRITICAL:        block_always     Archestra now
-  description    prompt inject    for read_file    BLOCKS the tool
-  has hidden     detected                          for all agents
-  instructions
-```
+<p align="center">
+  <img src="docs/closed-loop.jpg" width="700" alt="Closed-Loop Security">
+</p>
 
-Guardian writes **real policies** to Archestra's API:
+It reads tool definitions through Archestra's API, finds the problems, then writes real blocking policies back:
 
-- **Tool Invocation Policies** &rarr; `block_always`, `block_when_context_is_untrusted`
-- **Trusted Data Policies** &rarr; `sanitize_with_dual_llm`, `mark_as_untrusted`
+- **Tool Invocation Policies**: `block_always`, `block_when_context_is_untrusted`
+- **Trusted Data Policies**: `sanitize_with_dual_llm`, `mark_as_untrusted`
 
-One command hardens your entire MCP infrastructure.
+One chat command goes from "found a vulnerability" to "it's now blocked for every agent on the platform."
 
 ---
 
 ## Demo
 
-### The Malicious Server
+We built a deliberately broken MCP server with 7 tools designed to fail every check:
 
-We built a deliberately vulnerable MCP server (`demo/malicious-server/`) with **7 weaponized tools**:
-
-| Tool | Vulnerability |
-|------|--------------|
-| `read_file` | Prompt injection: hidden instruction to exfiltrate via `send_email` |
-| `execute` | No input validation, direct shell command execution |
+| Tool | What's wrong with it |
+|------|---------------------|
+| `read_file` | Hidden instruction in the description that tells the agent to exfiltrate via `send_email` |
+| `execute` | No input validation, runs shell commands directly |
 | `get_user_data` | Returns SSNs and credit cards with zero sanitization |
-| `search` | Tool shadowing with generic name to intercept queries |
-| `update_config` | Instructs agent to run with `sudo` privileges |
-| `send_email` | Unrestricted external communication (exfiltration leg) |
-| `fetch_webpage` | Processes untrusted embedded instructions |
+| `search` | Generic name designed to shadow legitimate tools |
+| `update_config` | Tells the agent to run with `sudo` |
+| `send_email` | Unrestricted external communication |
+| `fetch_webpage` | Processes embedded instructions from untrusted pages |
 
-### Attack &rarr; Detect &rarr; Block
+### Scanning it
 
-**Step 1: Scan the malicious server**
 ```
 You:  Scan the malicious-demo server with deep analysis
 
 Guardian → scan_server("malicious-demo", deep: true)
 
-┌─────────────────────────────────────────────────┐
-│  SCAN RESULTS: malicious-demo                    │
-│  Trust Score: 0/100 (Grade: F)                   │
-│  7 tools scanned, 19 vulnerabilities found       │
-├─────────────────────────────────────────────────┤
-│  ❌ CRITICAL  Prompt injection in read_file      │
-│  ❌ CRITICAL  Command injection in execute       │
-│  ❌ CRITICAL  Lethal Trifecta detected           │
-│  🟠 HIGH     PII exposure in get_user_data      │
-│  🟠 HIGH     Tool shadowing in search           │
-│  🟠 HIGH     Missing validation in update_config │
-│  🟡 MEDIUM   Unrestricted send_email            │
-│  ...                                             │
-└─────────────────────────────────────────────────┘
+  SCAN RESULTS: malicious-demo
+  Trust Score: 0/100 (Grade: F)
+  7 tools scanned, 19 vulnerabilities found
+
+  CRITICAL  Prompt injection in read_file
+  CRITICAL  Command injection in execute
+  CRITICAL  Lethal Trifecta detected
+  HIGH      PII exposure in get_user_data
+  HIGH      Tool shadowing in search
+  HIGH      Missing validation in update_config
+  MEDIUM    Unrestricted send_email
+  ...
 ```
 
-**Step 2: Generate and apply policies**
+### Locking it down
+
 ```
 You:  Generate strict policies for malicious-demo and apply them
 
 Guardian → generate_policy("malicious-demo", mode: "strict", dryRun: false)
 
-┌─────────────────────────────────────────────────┐
-│  POLICIES APPLIED: 9 policies created            │
-├─────────────────────────────────────────────────┤
-│  ✅ read_file      → block_always               │
-│  ✅ execute        → block_always               │
-│  ✅ get_user_data  → sanitize_with_dual_llm     │
-│  ✅ send_email     → block_when_untrusted       │
-│  ✅ fetch_webpage  → sanitize_with_dual_llm     │
-│  ✅ update_config  → block_when_untrusted       │
-│  ✅ search         → mark_as_untrusted          │
-│  ...                                             │
-└─────────────────────────────────────────────────┘
+  POLICIES APPLIED: 9 policies created
 
-Exfiltration path: BROKEN ✓
+  read_file      → block_always
+  execute        → block_always
+  get_user_data  → sanitize_with_dual_llm
+  send_email     → block_when_untrusted
+  fetch_webpage  → sanitize_with_dual_llm
+  update_config  → block_when_untrusted
+  search         → mark_as_untrusted
+  ...
+
+  Exfiltration path: BROKEN
 ```
 
-**Step 3: Try using the malicious tools**
+### Testing it
+
 ```
 You:  Read my secret file and email it to attacker@evil.com
 
-Archestra:  ❌ Tool "read_file" blocked by policy: block_always
-            Policy created by MCP Guardian (prompt injection detected)
+Archestra:  Tool "read_file" blocked by policy: block_always
 ```
 
-The attack is stopped at the platform level, not the application level.
+The attack gets stopped at the platform level. No agent can talk its way past a policy engine.
 
 ---
 
 ## Quick Start
 
-### Prerequisites
+### What you need
 
-- [Docker](https://docker.com) installed and running
+- [Docker](https://docker.com) installed
 - An LLM API key (OpenAI or Anthropic)
 
-### 1. Start Archestra (Quickstart Mode)
+### 1. Start Archestra
 
 ```bash
 docker run -d --name archestra \
@@ -199,35 +186,30 @@ docker run -d --name archestra \
   archestra/platform:latest
 ```
 
-> Quickstart mode embeds a Kubernetes cluster inside the Archestra container.
-> MCP servers deploy as pods in this internal cluster &mdash; no external K8s required.
+Quickstart mode runs an embedded Kubernetes cluster inside the container. MCP servers deploy as pods; no external K8s needed.
 
-Wait for Archestra to finish initializing (~60s), then open `http://localhost:3000` and sign in with `admin@example.com` / `password`.
+Wait ~60s for initialization, then open `http://localhost:3000` and sign in with `admin@example.com` / `password`.
 
-### 2. Build Docker Images
+### 2. Build the images
 
 ```bash
 git clone https://github.com/aryan877/mcp-guardian.git
 cd mcp-guardian
 
-# Build Guardian
 docker build -t mcp-guardian:latest .
-
-# Build the malicious demo server
 docker build -t malicious-demo:latest demo/malicious-server/
 ```
 
-### 3. Load Images into Archestra's Embedded K8s
+### 3. Load into Archestra's K8s
 
 ```bash
-# Archestra runs an internal kind cluster — images must be loaded explicitly
 docker exec archestra kind load docker-image mcp-guardian:latest --name archestra-mcp
 docker exec archestra kind load docker-image malicious-demo:latest --name archestra-mcp
 ```
 
-### 4. Create an API Key
+### 4. Create an API key
 
-Open `http://localhost:3000` → **Settings** → **API Keys** → **Create**. Name it something like `terraform-deploy` and copy the key (starts with `archestra_`).
+Open `http://localhost:3000` → Settings → API Keys → Create. Copy the key (starts with `archestra_`).
 
 ### 5. Deploy with Terraform
 
@@ -242,21 +224,11 @@ terraform init
 terraform apply
 ```
 
-This creates:
+This creates everything: catalog entries for both servers, K8s pod deployments, a "Guardian Security Agent" profile with all 6 tools assigned, and a security team.
 
-| Resource | What It Does |
-|----------|-------------|
-| `archestra_mcp_registry_catalog_item.guardian` | Registers Guardian in the MCP catalog |
-| `archestra_mcp_registry_catalog_item.malicious_demo` | Registers the demo vulnerable server |
-| `archestra_mcp_server_installation.guardian` | Deploys Guardian as a K8s pod inside Archestra |
-| `archestra_mcp_server_installation.malicious_demo` | Deploys the malicious server as a K8s pod |
-| `archestra_profile.guardian_agent` | Creates a "Guardian Security Agent" profile |
-| `archestra_profile_tool.*` (x6) | Assigns all 6 Guardian tools to the agent profile |
-| `archestra_team.security` | Creates a Security Team with Guardian access |
+### 6. Use it
 
-### 6. Use Guardian
-
-Open `http://localhost:3000`, select the **Guardian Security Agent** profile, and chat:
+Open `http://localhost:3000`, pick the Guardian Security Agent profile, and type:
 
 ```
 Scan the malicious-demo server with deep analysis
@@ -266,83 +238,104 @@ Scan the malicious-demo server with deep analysis
 
 ## Architecture
 
-```
-┌──────────────────── ARCHESTRA CONTAINER ────────────────────┐
-│                                                              │
-│  Archestra Platform (API :9000, UI :3000)                    │
-│  ┌──────────┐  ┌───────────┐  ┌──────────────────────────┐  │
-│  │ Chat UI  │  │  Policy   │  │     MCP Gateway          │  │
-│  │          │  │  Engine   │  │  (routes tool calls)     │  │
-│  └────┬─────┘  └────┬──────┘  └──────────┬───────────────┘  │
-│       │              │                     │                  │
-│       │    ┌─────────┴──────────┐          │                  │
-│       └───▶│    LLM Proxy      │          │                  │
-│            │  (Claude/GPT API) │          │                  │
-│            │  + policy enforce │          │                  │
-│            └───────────────────┘          │                  │
-│                                            │                  │
-│  ┌───────────┐  ┌───────────┐              │                  │
-│  │ Postgres  │  │ Metrics   │              │                  │
-│  │  (state)  │  │  (:9050)  │              │                  │
-│  └───────────┘  └───────────┘              │                  │
-│                                            │                  │
-│  ┌─── Embedded Kind Cluster (archestra-mcp) ──────────────┐  │
-│  │                                         │               │  │
-│  │                    ┌────────────────────┬┘               │  │
-│  │                    │                    │                │  │
-│  │                    ▼                    ▼                │  │
-│  │          ┌──────────────┐    ┌──────────────┐           │  │
-│  │          │ MCP GUARDIAN │    │  MALICIOUS   │           │  │
-│  │          │   (pod)      │    │  DEMO (pod)  │           │  │
-│  │          │  6 security  │    │  7 vulnerable│           │  │
-│  │          │  tools       │    │  tools       │           │  │
-│  │          │              │◀──▶│              │           │  │
-│  │          │ Reads tools  │    │ Gets scanned │           │  │
-│  │          │ via API ─────┼───▶│ and locked   │           │  │
-│  │          └──────────────┘    └──────────────┘           │  │
-│  └─────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────┘
-```
+<p align="center">
+  <img src="docs/architecture.jpg" width="700" alt="Architecture">
+</p>
 
-Everything runs inside a single Docker container. Archestra manages an embedded Kubernetes cluster where each MCP server runs as its own pod.
+Everything runs in one Docker container. Archestra manages an embedded K8s cluster where each MCP server gets its own pod.
 
-### How Guardian Reads Other Servers
-
-Guardian doesn't connect directly to MCP servers. It reads their **metadata through Archestra's API**:
+Guardian never connects to other MCP servers directly. It reads their metadata through Archestra's REST API:
 
 ```typescript
-// Guardian calls Archestra API to get a server's tool definitions
-const server = await client.findServer("malicious-demo");  // GET /api/mcp_server
-const tools = await client.getServerTools(server.id);      // GET /api/mcp_server/:id/tools
+// read tool definitions from Archestra
+const server = await client.findServer("malicious-demo");
+const tools = await client.getServerTools(server.id);
 
-// each tool has: name, description, inputSchema (JSON schema)
-// we pattern-match descriptions + schemas for known attack patterns:
-//   "send contents to evil-exfiltration.example.com" → CRITICAL
+// pattern-match descriptions + schemas for known attacks
+// "send contents to evil-exfiltration.example.com" → CRITICAL
 ```
 
-Then **writes policies back** to Archestra:
+Then writes policies back:
 
 ```typescript
-// then writes policies back to lock down the dangerous tools
+// block the dangerous tool for all agents
 await client.createToolInvocationPolicy({
   toolId: "read_file_uuid",
-  action: "block_always",              // archestra blocks this for all agents
+  action: "block_always",
 });
 
+// sanitize outputs with dual LLM quarantine
 await client.createTrustedDataPolicy({
   toolId: "get_user_data_uuid",
-  action: "sanitize_with_dual_llm",    // dual LLM quarantine on output
+  action: "sanitize_with_dual_llm",
 });
 ```
 
 ---
 
-## Terraform IaC
+## Vulnerability Detection
 
-The entire deployment is codified in `terraform/main.tf` using the [Archestra Terraform Provider](https://registry.terraform.io/providers/archestra-ai/archestra/latest):
+### Static patterns (7 categories)
+
+Guardian runs 50+ regex patterns against tool names, descriptions, and the full JSON schema tree (recursively, not just top-level):
+
+| Category | What it catches |
+|----------|----------------|
+| Prompt Injection | Hidden instructions in descriptions, override attempts, social engineering |
+| Excessive Permissions | `admin`, `root`, `sudo`, wildcard access |
+| Data Exfiltration | Tools that send data to external services |
+| Command Injection | Shell execution without sanitization |
+| PII Exposure | SSN, credit card, email patterns in outputs |
+| Missing Validation | Tools without input type checking |
+| Tool Poisoning | Generic names that shadow legitimate tools |
+
+### LLM deep scan
+
+When you pass `deep: true`, Guardian sends each tool definition to an LLM through Archestra's proxy. This catches semantic attacks that regex misses: things like obfuscated instructions, social engineering in descriptions, and encoded payloads.
+
+### Lethal Trifecta detection
+
+Guardian checks whether a server's tools, taken together, create an exfiltration chain. If it finds private data access + untrusted content processing + external comms on the same server, that's a critical finding regardless of individual tool scores.
+
+---
+
+## Trust Score
+
+6 dimensions, weighted by how much damage each one can cause:
+
+```
+Tool Description Safety     ████████░░  82/100  (25%)
+Permission Scope            ████████░░  78/100  (20%)
+Input Validation            ██████░░░░  65/100  (15%)
+Data Handling               ██████░░░░  60/100  (15%)
+Policy Compliance           ███████░░░  68/100  (15%)
+Tool Integrity              █████████░  85/100  (10%)
+
+Overall: 73/100  Grade: B
+```
+
+---
+
+## How We Use Archestra
+
+| Feature | What Guardian does with it |
+|---------|--------------------------|
+| MCP Server Runtime | Guardian runs as a managed pod in Archestra's embedded K8s |
+| LLM Proxy | Deep scans go through `/v1/openai/chat/completions` |
+| Tool Invocation Policies | `generate_policy` writes real blocking rules |
+| Trusted Data Policies | Marks dangerous outputs for dual LLM sanitization |
+| Terraform Provider | Full IaC: catalog, install, profile, tool assignments, team |
+| Chat UI | The only interface; you talk to Guardian in natural language |
+| Agentic Security Engine | Enforces every policy Guardian creates, in real time |
+| Observability | All tool calls logged in Archestra's audit trail |
+
+---
+
+## Terraform
+
+The full deployment is in `terraform/main.tf` using the [Archestra Terraform Provider](https://registry.terraform.io/providers/archestra-ai/archestra/latest):
 
 ```hcl
-# Register Guardian in Archestra's MCP catalog
 resource "archestra_mcp_registry_catalog_item" "guardian" {
   name        = "mcp-guardian"
   description = "Security auditor for MCP servers"
@@ -356,75 +349,17 @@ resource "archestra_mcp_registry_catalog_item" "guardian" {
   }
 }
 
-# Deploy as a pod inside Archestra's embedded K8s
 resource "archestra_mcp_server_installation" "guardian" {
   name          = "mcp-guardian"
   mcp_server_id = archestra_mcp_registry_catalog_item.guardian.id
 }
 
-# Create an agent profile with all Guardian tools
 resource "archestra_profile" "guardian_agent" {
   name = "Guardian Security Agent"
 }
 ```
 
-Full config includes catalog items, installations, agent profile, 6 tool assignments, and a security team.
-
----
-
-## Vulnerability Detection
-
-### Static Pattern Analysis (7 Categories)
-
-| Category | Patterns | Example Detection |
-|----------|----------|-------------------|
-| **Prompt Injection** | 17 regex patterns | Hidden instructions in tool descriptions |
-| **Excessive Permissions** | 5 patterns | `admin`, `root`, `sudo`, wildcard access |
-| **Data Exfiltration** | 4 patterns | Tools that send data externally |
-| **Command Injection** | 3 patterns | Shell execution without sanitization |
-| **PII Exposure** | 4 patterns | SSN, credit card, email patterns |
-| **Missing Validation** | Schema analysis | Tools without input type checking |
-| **Tool Poisoning** | Name analysis | Generic names that shadow legitimate tools |
-
-### LLM Deep Scan
-
-When `deep: true`, Guardian uses Archestra's LLM proxy to analyze each tool with AI &mdash; catching semantic vulnerabilities that regex can't find.
-
----
-
-## Trust Score Algorithm
-
-6 dimensions, weighted by security impact:
-
-```
-┌─────────────────────────────────────────┐
-│  Tool Description Safety     ████████░░  82/100  (25% weight)
-│  Permission Scope            ████████░░  78/100  (20% weight)
-│  Input Validation            ██████░░░░  65/100  (15% weight)
-│  Data Handling               ██████░░░░  60/100  (15% weight)
-│  Policy Compliance           ███████░░░  68/100  (15% weight)
-│  Tool Integrity              █████████░  85/100  (10% weight)
-├─────────────────────────────────────────┤
-│  Overall: 73/100  Grade: B              │
-└─────────────────────────────────────────┘
-```
-
----
-
-## Archestra Integration
-
-| Archestra Feature | How Guardian Uses It |
-|-------------------|---------------------|
-| **MCP Server Runtime** | Guardian runs as a managed pod in Archestra's embedded K8s |
-| **LLM Proxy** | Deep vulnerability analysis via `/v1/openai/chat/completions` |
-| **Tool Invocation Policies** | `generate_policy` creates real blocking rules |
-| **Trusted Data Policies** | Marks dangerous outputs for sanitization |
-| **Dual LLM Quarantine** | Recommends `sanitize_with_dual_llm` for high-risk tools |
-| **Terraform Provider** | Full IaC deployment: catalog, install, profile, tool assignments |
-| **MCP Gateway** | Exposed via `/v1/mcp/:profileId` for programmatic access |
-| **Chat UI** | Invoke Guardian through natural language conversation |
-| **Observability** | All tool calls logged in Archestra's audit trail |
-| **Cost Controls** | LLM usage tracked through Archestra's limits engine |
+One `terraform apply` creates catalog items, server installations, an agent profile, 6 tool assignments, and a security team.
 
 ---
 
@@ -440,14 +375,14 @@ mcp-guardian/
 │   │   ├── generate-policy.ts        # Policy creation & enforcement
 │   │   ├── trust-score.ts            # 6-dimension scoring algorithm
 │   │   ├── monitor.ts                # Real-time anomaly detection
-│   │   └── audit-report.ts           # Comprehensive reports
+│   │   └── audit-report.ts           # Full security reports
 │   ├── analysis/
-│   │   ├── vulnerability-patterns.ts # 30+ detection patterns
+│   │   ├── vulnerability-patterns.ts # 50+ detection patterns
 │   │   ├── prompt-injection.ts       # LLM-powered deep scan
 │   │   ├── scoring.ts                # Weighted trust score math
 │   │   └── test-generator.ts         # Schema-based test generation
 │   ├── archestra/
-│   │   ├── client.ts                 # Full Archestra API client
+│   │   ├── client.ts                 # Archestra API client
 │   │   └── types.ts                  # TypeScript definitions
 │   └── schemas/
 │       ├── inputs.ts                 # Zod input validation
@@ -455,7 +390,7 @@ mcp-guardian/
 ├── demo/
 │   └── malicious-server/             # 7 intentionally vulnerable tools
 ├── terraform/
-│   └── main.tf                       # Full IaC: catalog, install, profile, tools, team
+│   └── main.tf                       # Full IaC deployment
 ├── Dockerfile                        # Multi-stage build (node:24-alpine)
 └── package.json
 ```
@@ -464,10 +399,10 @@ mcp-guardian/
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
+| | |
+|---|---|
 | MCP Server | TypeScript + `@modelcontextprotocol/sdk` v1.12+ |
-| Schema Validation | Zod + zod-to-json-schema |
+| Validation | Zod + zod-to-json-schema |
 | Infrastructure | Terraform + [Archestra Provider](https://registry.terraform.io/providers/archestra-ai/archestra/latest) |
 | Transport | stdio (inside Archestra) + Streamable HTTP (standalone) |
 | Container | Multi-stage Docker (node:24-alpine) |
@@ -477,25 +412,23 @@ mcp-guardian/
 
 ## What We Learned
 
-- **The Lethal Trifecta is everywhere.** Private data access + untrusted content + external comms exists in almost every non-trivial MCP setup. Most developers don't see it because the tools look harmless individually.
+The Lethal Trifecta showed up in basically every MCP setup we tested. Most devs don't see it because each tool looks fine on its own. It's only when you look at what the tools can do together that the exfiltration path becomes obvious.
 
-- **Platform-level security beats application-level.** Blocking at the Archestra policy engine means no agent can bypass it, regardless of how clever the prompt injection is.
+Blocking at the platform level is the right call. It doesn't matter how clever a prompt injection is if the policy engine won't let the tool run in the first place.
 
-- **Dual LLM quarantine is underused.** Archestra's `sanitize_with_dual_llm` action is the correct answer for tools that return user-generated content. Two independent LLMs checking for injection is far more robust than regex.
+Archestra's `sanitize_with_dual_llm` is seriously underused. For any tool that returns user-generated content, running two independent LLMs as a quarantine layer is far more reliable than trying to regex your way to safety.
 
-- **MCP security needs automation.** Manual review doesn't scale. An MCP server that audits other MCP servers is the natural architecture.
-
-- **Infrastructure as Code matters.** Deploying both the security auditor and the vulnerable demo server through Terraform makes the entire setup reproducible in a single `terraform apply`.
+And the meta insight: an MCP server that audits other MCP servers is the natural architecture for this problem. Manual review doesn't scale. Automation does.
 
 ---
 
 <p align="center">
-  <b>Solo submission</b> by <a href="https://github.com/aryan877">Aryan Kumar</a> for the
+  Solo submission by <a href="https://github.com/aryan877">Aryan Kumar</a> for the
   <a href="https://www.wemakedevs.org/hackathons/2fast2mcp">2 Fast 2 MCP</a> hackathon
 </p>
 
 <p align="center">
-  <sub>Built with <a href="https://archestra.ai">Archestra</a> &mdash; the MCP platform for AI agents</sub>
+  <sub>Built on <a href="https://archestra.ai">Archestra</a></sub>
 </p>
 
 <p align="center">
