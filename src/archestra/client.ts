@@ -54,12 +54,27 @@ export class ArchestraClient {
 
   async findServer(serverName: string): Promise<McpServer> {
     const servers = await this.listServers();
-    const server = servers.find(
-      (s) =>
-        s.catalogName?.toLowerCase() === serverName.toLowerCase() ||
-        s.name.toLowerCase() === serverName.toLowerCase()
-    );
-    if (!server) throw new ServerNotFoundError(serverName);
+    const normalize = (s: string) => s.toLowerCase().replace(/[\s\-_]+/g, "");
+    const normalized = normalize(serverName);
+
+    // Try exact match first, then normalized match
+    const server =
+      servers.find(
+        (s) =>
+          s.catalogName?.toLowerCase() === serverName.toLowerCase() ||
+          s.name.toLowerCase() === serverName.toLowerCase()
+      ) ??
+      servers.find(
+        (s) =>
+          normalize(s.catalogName ?? "") === normalized ||
+          normalize(s.name) === normalized
+      );
+    if (!server) {
+      const available = servers.map((s) => s.catalogName || s.name).join(", ");
+      throw new ServerNotFoundError(
+        `${serverName}" not found. Available servers: ${available}`
+      );
+    }
     return server;
   }
 

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const ScanServerInput = z.object({
   serverName: z
     .string()
-    .describe("Name of the installed MCP server to scan"),
+    .describe("Exact catalog name of the installed MCP server to scan (e.g. 'malicious-demo', 'mcp-guardian'). Use hyphenated names, not spaces."),
   deep: z
     .boolean()
     .optional()
@@ -12,7 +12,7 @@ export const ScanServerInput = z.object({
 });
 
 export const TestServerInput = z.object({
-  serverName: z.string().describe("Name of the MCP server to test"),
+  serverName: z.string().describe("Exact catalog name of the MCP server to test (e.g. 'malicious-demo'). Use hyphenated names."),
   toolName: z
     .string()
     .optional()
@@ -32,7 +32,7 @@ export const TestServerInput = z.object({
 });
 
 export const GeneratePolicyInput = z.object({
-  serverName: z.string().describe("Name of the MCP server"),
+  serverName: z.string().describe("Exact catalog name of the MCP server (e.g. 'malicious-demo'). Use hyphenated names."),
   mode: z
     .enum(["recommended", "strict", "permissive"])
     .default("recommended")
@@ -47,14 +47,14 @@ export const GeneratePolicyInput = z.object({
 export const TrustScoreInput = z.object({
   serverName: z
     .string()
-    .describe("Name of the MCP server to score"),
+    .describe("Exact catalog name of the MCP server to score (e.g. 'malicious-demo'). Use hyphenated names."),
 });
 
 export const MonitorInput = z.object({
   serverName: z
     .string()
     .optional()
-    .describe("Specific server to monitor (all if omitted)"),
+    .describe("Exact catalog name of the server to monitor (e.g. 'malicious-demo'). All servers if omitted."),
   lookbackMinutes: z
     .number()
     .optional()
@@ -73,7 +73,7 @@ export const AuditReportInput = z.object({
   serverName: z
     .string()
     .optional()
-    .describe("Specific server (all servers if omitted)"),
+    .describe("Exact catalog name of the server (e.g. 'malicious-demo'). All servers if omitted."),
   format: z
     .enum(["markdown", "json"])
     .optional()
