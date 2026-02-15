@@ -18,6 +18,7 @@
 </p>
 
 <p align="center">
+  <a href="#live-demo">Live Demo</a> &bull;
   <a href="#the-problem">Problem</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
   <a href="#demo">Demo</a> &bull;
@@ -25,6 +26,23 @@
   <a href="#architecture">Architecture</a> &bull;
   <a href="#dashboard">Dashboard</a>
 </p>
+
+---
+
+## Live Demo
+
+> **Try it now** &mdash; no setup required.
+
+| Service | URL |
+|---------|-----|
+| **Archestra UI** (chat with Guardian) | [guardian.aryankumar.dev](https://guardian.aryankumar.dev) |
+| **Archestra API** | [guardian-api.aryankumar.dev](https://guardian-api.aryankumar.dev) |
+
+Sign in with `admin@example.com` / `password`, select the **Guardian Security Agent** profile, and try:
+
+```
+Scan the malicious-demo server with deep analysis
+```
 
 ---
 
