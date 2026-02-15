@@ -54,7 +54,7 @@ export async function testServer(
             content: `Test type: ${tc.testType}\nInput: ${JSON.stringify(tc.input)}\nExpected: ${tc.expectedBehavior}`,
           },
         ],
-        "gpt-4o-mini"
+        "gpt-5-mini"
       );
 
       const content = response.choices?.[0]?.message?.content ?? "";

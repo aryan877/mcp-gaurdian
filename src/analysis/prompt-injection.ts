@@ -1,4 +1,4 @@
-// LLM-based deep scan: we send the tool definition to GPT-4o-mini via
+// LLM-based deep scan: we send the tool definition to GPT-5 mini via
 // Archestra's LLM proxy and ask it to find semantic injection patterns
 // that regex can't catch. This is the "deep: true" mode in scan_server.
 
@@ -49,7 +49,7 @@ export async function analyzeWithLlm(
         { role: "system", content: ANALYSIS_PROMPT },
         { role: "user", content: `Analyze this tool:\n\n${toolDef}` },
       ],
-      "gpt-4o-mini"
+      "gpt-5-mini"
     );
 
     const content = response.choices?.[0]?.message?.content ?? "[]";

@@ -163,7 +163,7 @@ export class ArchestraClient {
 
   async chatCompletion(
     messages: LlmChatMessage[],
-    model: string = "gpt-4o-mini"
+    model: string = "gpt-5-mini"
   ): Promise<LlmChatResponse> {
     log(LogLevel.DEBUG, `LLM chat completion via Archestra proxy`, { model });
     const { data } = await this.http.post("/v1/openai/chat/completions", {
