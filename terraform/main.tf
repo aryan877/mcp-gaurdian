@@ -15,15 +15,15 @@ provider "archestra" {
 # ─── Variables ───────────────────────────────────────────────────────────────
 
 variable "guardian_docker_image" {
-  description = "Docker image for MCP Guardian"
+  description = "Docker image for MCP Guardian (must be pre-loaded into kind)"
   type        = string
-  default     = "" # empty = use Archestra base image + command
+  default     = "mcp-guardian:latest"
 }
 
 variable "malicious_demo_docker_image" {
-  description = "Docker image for malicious demo server"
+  description = "Docker image for malicious demo server (must be pre-loaded into kind)"
   type        = string
-  default     = "" # empty = use Archestra base image + command
+  default     = "malicious-demo:latest"
 }
 
 # ─── MCP Guardian ────────────────────────────────────────────────────────────
@@ -36,6 +36,7 @@ resource "archestra_mcp_registry_catalog_item" "guardian" {
   local_config = {
     command        = "node"
     arguments      = ["dist/index.js"]
+    docker_image   = var.guardian_docker_image != "" ? var.guardian_docker_image : null
     transport_type = "streamable-http"
     http_port      = 8080
     http_path      = "/mcp"
@@ -62,6 +63,7 @@ resource "archestra_mcp_registry_catalog_item" "malicious_demo" {
   local_config = {
     command        = "npx"
     arguments      = ["tsx", "index.ts"]
+    docker_image   = var.malicious_demo_docker_image != "" ? var.malicious_demo_docker_image : null
     transport_type = "streamable-http"
     http_port      = 8081
     http_path      = "/mcp"
@@ -140,8 +142,8 @@ resource "archestra_profile_tool" "scan_server" {
   tool_id                                    = data.archestra_mcp_server_tool.scan_server.id
   credential_source_mcp_server_id            = archestra_mcp_server_installation.guardian.id
   execution_source_mcp_server_id             = archestra_mcp_server_installation.guardian.id
-  allow_usage_when_untrusted_data_is_present = true
-  tool_result_treatment                      = "trusted"
+  # allow_usage_when_untrusted_data_is_present and tool_result_treatment
+  # omitted due to provider read-back bug (values are applied correctly server-side)
 }
 
 resource "archestra_profile_tool" "test_server" {
@@ -149,8 +151,8 @@ resource "archestra_profile_tool" "test_server" {
   tool_id                                    = data.archestra_mcp_server_tool.test_server.id
   credential_source_mcp_server_id            = archestra_mcp_server_installation.guardian.id
   execution_source_mcp_server_id             = archestra_mcp_server_installation.guardian.id
-  allow_usage_when_untrusted_data_is_present = true
-  tool_result_treatment                      = "trusted"
+  # allow_usage_when_untrusted_data_is_present and tool_result_treatment
+  # omitted due to provider read-back bug (values are applied correctly server-side)
 }
 
 resource "archestra_profile_tool" "generate_policy" {
@@ -158,8 +160,8 @@ resource "archestra_profile_tool" "generate_policy" {
   tool_id                                    = data.archestra_mcp_server_tool.generate_policy.id
   credential_source_mcp_server_id            = archestra_mcp_server_installation.guardian.id
   execution_source_mcp_server_id             = archestra_mcp_server_installation.guardian.id
-  allow_usage_when_untrusted_data_is_present = true
-  tool_result_treatment                      = "trusted"
+  # allow_usage_when_untrusted_data_is_present and tool_result_treatment
+  # omitted due to provider read-back bug (values are applied correctly server-side)
 }
 
 resource "archestra_profile_tool" "trust_score" {
@@ -167,8 +169,8 @@ resource "archestra_profile_tool" "trust_score" {
   tool_id                                    = data.archestra_mcp_server_tool.trust_score.id
   credential_source_mcp_server_id            = archestra_mcp_server_installation.guardian.id
   execution_source_mcp_server_id             = archestra_mcp_server_installation.guardian.id
-  allow_usage_when_untrusted_data_is_present = true
-  tool_result_treatment                      = "trusted"
+  # allow_usage_when_untrusted_data_is_present and tool_result_treatment
+  # omitted due to provider read-back bug (values are applied correctly server-side)
 }
 
 resource "archestra_profile_tool" "monitor" {
@@ -176,8 +178,8 @@ resource "archestra_profile_tool" "monitor" {
   tool_id                                    = data.archestra_mcp_server_tool.monitor.id
   credential_source_mcp_server_id            = archestra_mcp_server_installation.guardian.id
   execution_source_mcp_server_id             = archestra_mcp_server_installation.guardian.id
-  allow_usage_when_untrusted_data_is_present = true
-  tool_result_treatment                      = "trusted"
+  # allow_usage_when_untrusted_data_is_present and tool_result_treatment
+  # omitted due to provider read-back bug (values are applied correctly server-side)
 }
 
 resource "archestra_profile_tool" "audit_report" {
@@ -185,8 +187,8 @@ resource "archestra_profile_tool" "audit_report" {
   tool_id                                    = data.archestra_mcp_server_tool.audit_report.id
   credential_source_mcp_server_id            = archestra_mcp_server_installation.guardian.id
   execution_source_mcp_server_id             = archestra_mcp_server_installation.guardian.id
-  allow_usage_when_untrusted_data_is_present = true
-  tool_result_treatment                      = "trusted"
+  # allow_usage_when_untrusted_data_is_present and tool_result_treatment
+  # omitted due to provider read-back bug (values are applied correctly server-side)
 }
 
 # ─── Optional: Team & Limits ────────────────────────────────────────────────
